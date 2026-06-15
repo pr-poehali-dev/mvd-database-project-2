@@ -108,3 +108,12 @@
   );
   background-size: 22px 22px;
 }
+
+@media print {
+  body {
+    background: #fff;
+  }
+  @page {
+    margin: 16mm;
+  }
+}
