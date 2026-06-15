@@ -599,13 +599,10 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
   const [photo, setPhoto] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
-  type PF = { fio: string; birth: string; place: string; series: string; number: string; issued: string; date: string };
-  const empty: PF = { fio: '', birth: '', place: '', series: '', number: '', issued: '', date: '' };
+  type PF = { fio: string; birth: string; place: string; series: string; number: string; issued: string; date: string; gender: string; code: string };
+  const empty: PF = { fio: '', birth: '', place: '', series: '', number: '', issued: '', date: '', gender: '', code: '' };
   const [form, setForm] = useState<PF>(empty);
   const set = (k: keyof PF, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const qrData = encodeURIComponent(`${form.series || '0000'} ${form.number || '000000'} ${form.fio || 'Гражданин РФ'}`);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}`;
 
   const save = () => {
     if (!form.fio) { toast({ title: 'Укажите ФИО', variant: 'destructive' }); return; }
@@ -617,192 +614,265 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
   const printPassport = () => {
     const el = printRef.current;
     if (!el) return;
-    const html = el.outerHTML;
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Паспорт</title>
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Паспорт РФ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Times+New+Roman:wght@400;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { background:#fff; font-family:'Roboto',sans-serif; display:flex; justify-content:center; align-items:center; min-height:100vh; }
-      .passport-book { width:800px; display:flex; box-shadow:0 8px 40px rgba(0,0,0,0.3); border-radius:6px; overflow:hidden; }
-      .passport-cover { width:220px; background:linear-gradient(160deg,#8B1A1A 0%,#6B0F0F 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px; color:#fff; text-align:center; position:relative; }
-      .passport-cover::after { content:''; position:absolute; inset:0; background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,0.05) 1px,transparent 0); background-size:14px 14px; }
-      .cover-emblem { width:80px; height:80px; object-fit:cover; border-radius:50%; border:2px solid rgba(201,161,74,0.6); margin-bottom:16px; position:relative; z-index:1; }
-      .cover-title { font-family:'Oswald',sans-serif; font-size:14px; letter-spacing:3px; text-transform:uppercase; color:#C9A14A; line-height:1.5; position:relative; z-index:1; }
-      .cover-sub { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.5); margin-top:8px; position:relative; z-index:1; }
-      .spine { width:12px; background:linear-gradient(to right,#5a0a0a,#8B1A1A); }
-      .passport-inner { flex:1; background:#fff; padding:32px; border-left:1px solid #e0e0e0; }
-      .inner-header { display:flex; align-items:center; gap:12px; border-bottom:2px solid #8B1A1A; padding-bottom:12px; margin-bottom:20px; }
-      .inner-header img { width:40px; height:40px; object-fit:cover; }
-      .inner-header-text { font-family:'Oswald',sans-serif; }
-      .inner-header-text .country { font-size:11px; color:#666; text-transform:uppercase; letter-spacing:1px; }
-      .inner-header-text .doctype { font-size:16px; color:#8B1A1A; text-transform:uppercase; letter-spacing:2px; }
-      .passport-number { font-family:'Oswald',sans-serif; font-size:22px; color:#0B2349; letter-spacing:4px; margin-bottom:20px; border:1px solid #ddd; display:inline-block; padding:4px 12px; border-radius:3px; background:#f8f8f8; }
-      .inner-body { display:flex; gap:24px; }
-      .photo-block { width:110px; flex-shrink:0; }
-      .photo-block img, .photo-placeholder { width:110px; height:140px; object-fit:cover; border:2px solid #ccc; border-radius:3px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#999; font-size:11px; }
-      .fields { flex:1; }
-      .field-row { margin-bottom:14px; }
-      .field-label { font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:#888; margin-bottom:2px; }
-      .field-value { font-size:14px; font-weight:500; color:#111; border-bottom:1px solid #e0e0e0; padding-bottom:4px; min-height:22px; }
-      .field-row-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-      .footer { margin-top:24px; padding-top:12px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-end; }
-      .footer-sign { font-size:10px; color:#888; }
-      .footer-sign .line { width:140px; border-top:1px solid #555; margin-top:24px; }
-      .qr-block { text-align:center; }
-      .qr-block img { width:70px; height:70px; }
-      .qr-block p { font-size:8px; color:#999; margin-top:3px; }
-      .mrz { margin-top:16px; font-family:'Courier New',monospace; font-size:11px; color:#333; background:#f5f5f5; padding:8px 10px; border-radius:3px; letter-spacing:2px; line-height:1.8; }
-    </style></head><body>${html}</body></html>`);
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{background:#e8e8e8;font-family:'Roboto',sans-serif;display:flex;justify-content:center;align-items:flex-start;padding:30px;}
+      .spread{display:flex;width:780px;box-shadow:0 8px 40px rgba(0,0,0,0.4);}
+    </style></head><body><div class="spread">${el.innerHTML}</div></body></html>`);
     win.document.close();
-    setTimeout(() => { win.print(); }, 400);
+    setTimeout(() => win.print(), 500);
   };
 
   const fioP = form.fio ? form.fio.split(' ') : [];
-  const lastName = fioP[0] || '—';
-  const firstName = fioP[1] || '—';
-  const midName = fioP[2] || '—';
-  const mrzLine1 = `P<RUS${(lastName + '<<' + firstName + '<' + midName).replace(/\s/g,'<').toUpperCase().padEnd(39,'<')}`.slice(0,44);
-  const mrzLine2 = `${(form.series||'0000').replace(/\s/g,'')}${(form.number||'000000').replace(/\s/g,'')}0RUS${(form.birth||'000000').replace(/[^0-9]/g,'').slice(2)}0`.padEnd(44,'<').slice(0,44);
+  const lastName  = fioP[0] || '';
+  const firstName = fioP[1] || '';
+  const midName   = fioP[2] || '';
+  const sn = (form.series || '0000').replace(/\s/g, '') + (form.number || '000000').replace(/\s/g, '');
+  const mrzLine1 = `P<RUS${(lastName+'<<'+firstName+'<'+midName).toUpperCase().replace(/[^A-Z<]/g,'').padEnd(39,'<')}`.slice(0,44);
+  const mrzLine2 = `${sn}0RUS${(form.birth||'').replace(/[^0-9]/g,'').slice(2,8).padEnd(6,'0')}0${(form.date||'').replace(/[^0-9]/g,'').slice(2,8).padEnd(6,'0')}1<<<<<<<<<<<<<<<4`.slice(0,44);
+
+  // Shared page style (beige with subtle pattern)
+  const pageBg = '#e8ddd0';
+  const pageStyle: React.CSSProperties = {
+    flex: 1, minHeight: '460px', padding: '22px 20px', position: 'relative', overflow: 'hidden',
+    background: `${pageBg} url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23b8a898' fill-opacity='0.12'%3E%3Cpath d='M30 30m-12 0a12 12 0 1 0 24 0a12 12 0 1 0-24 0'/%3E%3C/g%3E%3C/svg%3E")`,
+    fontFamily: 'Roboto,sans-serif',
+  };
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-5 gap-6">
-        {/* Form */}
+      {/* Layout: form left, passport preview right */}
+      <div className="grid grid-cols-5 gap-6 items-start">
+        {/* FORM */}
         <div className="col-span-2">
-          <Card className="p-6">
-            <h3 className="font-heading text-lg text-gov-navy uppercase mb-4">Данные паспорта</h3>
-            <div className="space-y-3">
-              {([['fio', 'Фамилия Имя Отчество'], ['birth', 'Дата рождения'], ['place', 'Место рождения'], ['issued', 'Кем выдан'], ['date', 'Дата выдачи']] as [keyof PF, string][]).map(([k, label]) => (
-                <div key={k}><Label>{label}</Label><Input className="mt-1" value={form[k]} onChange={(e) => set(k, e.target.value)} /></div>
-              ))}
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Серия</Label><Input className="mt-1" maxLength={4} value={form.series} onChange={(e) => set('series', e.target.value)} placeholder="4512" /></div>
-                <div><Label>Номер</Label><Input className="mt-1" maxLength={6} value={form.number} onChange={(e) => set('number', e.target.value)} placeholder="123456" /></div>
+          <Card className="p-5">
+            <h3 className="font-heading text-base text-gov-navy uppercase mb-4 tracking-wide">Данные паспорта</h3>
+            <div className="space-y-2.5">
+              <div><Label className="text-xs">Фамилия Имя Отчество</Label><Input className="mt-1 h-9" value={form.fio} onChange={(e) => set('fio', e.target.value)} placeholder="Иванов Иван Иванович" /></div>
+              <div><Label className="text-xs">Дата рождения</Label><Input className="mt-1 h-9" value={form.birth} onChange={(e) => set('birth', e.target.value)} placeholder="01.01.1990" /></div>
+              <div><Label className="text-xs">Пол</Label>
+                <select className="mt-1 w-full h-9 rounded-md border border-input px-3 text-sm" value={form.gender} onChange={(e) => set('gender', e.target.value)}>
+                  <option value="">Выберите...</option><option>МУЖ.</option><option>ЖЕН.</option>
+                </select>
               </div>
-              <Button onClick={() => fileRef.current?.click()} variant="outline" className="w-full">
-                <Icon name="Camera" size={16} className="mr-2" />{photo ? 'Заменить фото' : 'Загрузить фото гражданина'}
+              <div><Label className="text-xs">Место рождения</Label><Input className="mt-1 h-9" value={form.place} onChange={(e) => set('place', e.target.value)} placeholder="с. Москва" /></div>
+              <div><Label className="text-xs">Кем выдан</Label><Input className="mt-1 h-9" value={form.issued} onChange={(e) => set('issued', e.target.value)} placeholder="Отделением УФМС России..." /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Дата выдачи</Label><Input className="mt-1 h-9" value={form.date} onChange={(e) => set('date', e.target.value)} placeholder="01.01.2012" /></div>
+                <div><Label className="text-xs">Код подразд.</Label><Input className="mt-1 h-9" value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="110-005" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">Серия</Label><Input className="mt-1 h-9" maxLength={4} value={form.series} onChange={(e) => set('series', e.target.value)} placeholder="4512" /></div>
+                <div><Label className="text-xs">Номер</Label><Input className="mt-1 h-9" maxLength={6} value={form.number} onChange={(e) => set('number', e.target.value)} placeholder="123456" /></div>
+              </div>
+              <Button onClick={() => fileRef.current?.click()} variant="outline" className="w-full h-9">
+                <Icon name="Camera" size={15} className="mr-2" />{photo ? 'Заменить фото' : 'Загрузить фото'}
               </Button>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await readFile(f)); }} />
               <div className="flex gap-2 pt-1">
-                <Button onClick={save} className="flex-1 bg-gov-navy hover:bg-gov-blue"><Icon name="Save" size={16} className="mr-2" />Сохранить</Button>
-                <Button onClick={printPassport} variant="outline" className="flex-1"><Icon name="Printer" size={16} className="mr-2" />Печать</Button>
+                <Button onClick={save} className="flex-1 bg-gov-navy hover:bg-gov-blue h-9 text-sm"><Icon name="Save" size={15} className="mr-1.5" />Сохранить</Button>
+                <Button onClick={printPassport} variant="outline" className="flex-1 h-9 text-sm"><Icon name="Printer" size={15} className="mr-1.5" />Печать</Button>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Passport book preview */}
-        <div className="col-span-3 flex items-start justify-center">
-          <div ref={printRef} className="passport-book" style={{ width: '100%', display: 'flex', boxShadow: '0 8px 40px rgba(0,0,0,0.25)', borderRadius: '6px', overflow: 'hidden', fontFamily: 'Roboto,sans-serif' }}>
-            {/* Cover */}
-            <div style={{ width: '180px', flexShrink: 0, background: 'linear-gradient(160deg,#8B1A1A 0%,#6B0F0F 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 14px', color: '#fff', textAlign: 'center', position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle at 1px 1px,rgba(255,255,255,0.05) 1px,transparent 0)', backgroundSize: '14px 14px' }} />
-              <img src={EMBLEM} className="cover-emblem" style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '50%', border: '2px solid rgba(201,161,74,0.5)', marginBottom: '14px', position: 'relative', zIndex: 1 }} />
-              <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: '11px', letterSpacing: '3px', textTransform: 'uppercase', color: '#C9A14A', lineHeight: 1.6, position: 'relative', zIndex: 1 }}>
-                Российская<br />Федерация
+        {/* PASSPORT SPREAD PREVIEW */}
+        <div className="col-span-3">
+          <div ref={printRef} style={{ display: 'flex', boxShadow: '0 6px 30px rgba(0,0,0,0.35)', fontFamily: 'Roboto,sans-serif' }}>
+
+            {/* ===== LEFT PAGE — выдача ===== */}
+            <div style={{ ...pageStyle, borderRight: '3px solid #6b5a4a' }}>
+              {/* watermark emblems */}
+              {[['15%','20%'],['60%','50%'],['30%','75%']].map(([l,t],i) => (
+                <img key={i} src={EMBLEM} style={{ position:'absolute', left:l, top:t, width:'60px', height:'60px', objectFit:'cover', opacity:0.06, filter:'grayscale(1)' }} />
+              ))}
+              {/* РОССИЯ repeated header */}
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:'7px', letterSpacing:'3px', color:'#8B1A1A', marginBottom:'10px', opacity:0.7 }}>
+                {['РОССИЯ','РОССИЯ','РОССИЯ','РОССИЯ','РОССИЯ'].map((r,i)=><span key={i}>{r}</span>)}
               </div>
-              <div style={{ fontSize: '8px', letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginTop: '10px', position: 'relative', zIndex: 1 }}>
-                Паспорт<br />гражданина
+              {/* Title */}
+              <div style={{ textAlign:'center', marginBottom:'14px' }}>
+                <div style={{ fontSize:'10px', letterSpacing:'4px', color:'#222', textTransform:'uppercase', fontWeight:500 }}>Р О С С И Й С К А Я &nbsp; Ф Е Д Е Р А Ц И Я</div>
               </div>
-              <div style={{ position: 'absolute', bottom: '16px', color: 'rgba(201,161,74,0.3)', fontSize: '60px', zIndex: 0, lineHeight: 1 }}>⋮</div>
+              {/* Issued by */}
+              <div style={{ marginBottom:'6px' }}>
+                <div style={{ fontSize:'7.5px', color:'#555' }}>Паспорт выдан</div>
+                <div style={{ borderBottom:'1px solid #888', paddingBottom:'2px', marginTop:'2px', minHeight:'16px', fontSize:'9px', fontWeight:600, textTransform:'uppercase', textAlign:'center', color:'#111', letterSpacing:'1px' }}>
+                  {form.issued || ''}
+                </div>
+              </div>
+              <div style={{ height:'8px' }} />
+              {/* Date + code */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', marginBottom:'16px' }}>
+                <div>
+                  <div style={{ fontSize:'7.5px', color:'#555' }}>Дата выдачи</div>
+                  <div style={{ borderBottom:'1px solid #888', paddingBottom:'2px', marginTop:'2px', minHeight:'16px', fontSize:'11px', fontWeight:600, color:'#222', letterSpacing:'1px' }}>{form.date || ''}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:'7.5px', color:'#555' }}>Код подразделения</div>
+                  <div style={{ borderBottom:'1px solid #888', paddingBottom:'2px', marginTop:'2px', minHeight:'16px', fontSize:'11px', fontWeight:600, color:'#222', letterSpacing:'1px' }}>{form.code || ''}</div>
+                </div>
+              </div>
+              {/* Signature area */}
+              <div style={{ display:'flex', gap:'20px', alignItems:'flex-end', marginTop:'10px', marginBottom:'16px' }}>
+                <div style={{ flex:1 }}>
+                  {/* mock signature */}
+                  <div style={{ fontSize:'28px', color:'#333', fontFamily:'cursive', opacity:0.5, marginBottom:'4px', lineHeight:1 }}>
+                    {form.fio ? form.fio.split(' ').map(w=>w[0]).join('') : ''}
+                  </div>
+                  <div style={{ borderBottom:'1px solid #888', width:'120px' }} />
+                </div>
+                {/* mock round stamp */}
+                <div style={{ width:'72px', height:'72px', borderRadius:'50%', border:'2.5px dashed rgba(180,60,60,0.45)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <div style={{ width:'56px', height:'56px', borderRadius:'50%', border:'1.5px solid rgba(180,60,60,0.4)', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', textAlign:'center' }}>
+                    <div style={{ fontSize:'5px', color:'rgba(180,60,60,0.6)', letterSpacing:'1px', textTransform:'uppercase' }}>МВД<br/>РОССИЯ</div>
+                    <img src={EMBLEM} style={{ width:'20px', height:'20px', objectFit:'cover', opacity:0.35 }} />
+                    <div style={{ fontSize:'5px', color:'rgba(180,60,60,0.5)', letterSpacing:'0.5px' }}>{form.code || '000-000'}</div>
+                  </div>
+                </div>
+              </div>
+              {/* Personal sign */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginTop:'8px' }}>
+                <div>
+                  <div style={{ fontSize:'7px', color:'#666' }}>Личный код</div>
+                  <div style={{ borderBottom:'1px solid #888', minHeight:'14px', marginTop:'2px' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize:'7px', color:'#666' }}>Личная подпись</div>
+                  <div style={{ borderBottom:'1px solid #888', minHeight:'14px', marginTop:'2px' }} />
+                </div>
+              </div>
+              {/* Series vertical */}
+              <div style={{ position:'absolute', right:'6px', top:'0', bottom:'0', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <div style={{ writingMode:'vertical-rl', fontWeight:700, fontSize:'11px', color:'#8B1A1A', letterSpacing:'4px', opacity:0.85 }}>
+                  {form.series || '00'} {form.number || '000000'}
+                </div>
+              </div>
+              {/* РОССИЯ repeated footer */}
+              <div style={{ position:'absolute', bottom:'4px', left:'20px', right:'20px', display:'flex', justifyContent:'space-between', fontSize:'7px', letterSpacing:'3px', color:'#8B1A1A', opacity:0.7 }}>
+                {['RUSSIA','РОССИЯ','RUSSIA','РОССИЯ','RUSSIA'].map((r,i)=><span key={i}>{r}</span>)}
+              </div>
             </div>
-            {/* Spine */}
-            <div style={{ width: '10px', background: 'linear-gradient(to right,#5a0a0a,#8B1A1A)', flexShrink: 0 }} />
-            {/* Inner page */}
-            <div style={{ flex: 1, background: '#fff', padding: '24px', borderLeft: '1px solid #e0e0e0' }}>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '2px solid #8B1A1A', paddingBottom: '10px', marginBottom: '16px' }}>
-                <img src={EMBLEM} style={{ width: '36px', height: '36px', objectFit: 'cover' }} />
-                <div style={{ fontFamily: 'Oswald,sans-serif' }}>
-                  <div style={{ fontSize: '9px', color: '#777', textTransform: 'uppercase', letterSpacing: '1px' }}>Министерство внутренних дел</div>
-                  <div style={{ fontSize: '13px', color: '#8B1A1A', textTransform: 'uppercase', letterSpacing: '2px' }}>Паспорт гражданина РФ</div>
-                </div>
+
+            {/* ===== RIGHT PAGE — фото и данные ===== */}
+            <div style={{ ...pageStyle }}>
+              {/* watermark emblems */}
+              {[['10%','30%'],['55%','15%'],['40%','65%']].map(([l,t],i) => (
+                <img key={i} src={EMBLEM} style={{ position:'absolute', left:l, top:t, width:'55px', height:'55px', objectFit:'cover', opacity:0.07, filter:'grayscale(1)' }} />
+              ))}
+              {/* РОССИЯ repeated header */}
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:'7px', letterSpacing:'3px', color:'#8B1A1A', marginBottom:'8px', opacity:0.7 }}>
+                {['РОССИЯ','RUSSIA','РОССИЯ','RUSSIA','РОССИЯ'].map((r,i)=><span key={i}>{r}</span>)}
               </div>
-              {/* Series/number */}
-              <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: '18px', color: '#0B2349', letterSpacing: '4px', marginBottom: '16px', display: 'inline-block', padding: '3px 10px', border: '1px solid #ddd', borderRadius: '3px', background: '#f8f8f8' }}>
-                {form.series || '0000'} {form.number || '000000'}
-              </div>
-              {/* Body */}
-              <div style={{ display: 'flex', gap: '20px' }}>
-                {/* Photo */}
-                <div style={{ flexShrink: 0 }}>
-                  <div style={{ width: '90px', height: '116px', border: '1.5px solid #ccc', borderRadius: '3px', overflow: 'hidden', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+
+              {/* Body: photo + fields */}
+              <div style={{ display:'flex', gap:'14px', marginBottom:'10px' }}>
+                {/* Photo with ornament frame */}
+                <div style={{ flexShrink:0 }}>
+                  <div style={{ width:'95px', height:'124px', border:'3px solid #8B1A1A', background:'#f0ebe4', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' }}>
+                    {/* red ornament corners */}
+                    {[{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}].map((pos,i)=>(
+                      <div key={i} style={{ position:'absolute', width:'12px', height:'12px', borderTop: (pos.top===0)?'3px solid #8B1A1A':'none', borderBottom:(pos.bottom===0)?'3px solid #8B1A1A':'none', borderLeft:(pos.left===0)?'3px solid #8B1A1A':'none', borderRight:(pos.right===0)?'3px solid #8B1A1A':'none', ...pos }} />
+                    ))}
                     {photo
-                      ? <img src={photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ fontSize: '10px', color: '#aaa', textAlign: 'center', padding: '8px' }}>Фото</span>}
-                  </div>
-                  <div style={{ marginTop: '10px', textAlign: 'center' }}>
-                    <img src={qrUrl} style={{ width: '58px', height: '58px' }} />
-                    <div style={{ fontSize: '7px', color: '#aaa', marginTop: '2px' }}>ID-код</div>
+                      ? <img src={photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      : <Icon name="User" size={36} className="text-gov-navy/25" />}
                   </div>
                 </div>
+
                 {/* Fields */}
-                <div style={{ flex: 1 }}>
+                <div style={{ flex:1 }}>
                   {[
                     ['Фамилия', lastName],
                     ['Имя', firstName],
                     ['Отчество', midName],
-                    ['Дата рождения', form.birth || '—'],
-                    ['Место рождения', form.place || '—'],
-                  ].map(([l, v]) => (
-                    <div key={l} style={{ marginBottom: '10px' }}>
-                      <div style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#888', marginBottom: '1px' }}>{l}</div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', borderBottom: '1px solid #e8e8e8', paddingBottom: '3px', minHeight: '18px' }}>{v}</div>
+                  ].map(([l,v]) => (
+                    <div key={l} style={{ marginBottom:'8px' }}>
+                      <div style={{ fontSize:'7px', color:'#555' }}>{l}</div>
+                      <div style={{ fontSize:'11px', fontWeight:600, color:'#111', borderBottom:'1px solid #888', paddingBottom:'2px', minHeight:'15px', letterSpacing:'0.5px' }}>{v}</div>
                     </div>
                   ))}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
-                    {[['Кем выдан', form.issued || '—'], ['Дата выдачи', form.date || '—']].map(([l, v]) => (
-                      <div key={l}>
-                        <div style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '1px' }}>{l}</div>
-                        <div style={{ fontSize: '11px', fontWeight: 500, color: '#333', borderBottom: '1px solid #e8e8e8', paddingBottom: '2px', minHeight: '16px' }}>{v}</div>
-                      </div>
-                    ))}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                    <div>
+                      <div style={{ fontSize:'7px', color:'#555' }}>Пол</div>
+                      <div style={{ fontSize:'10px', fontWeight:600, color:'#111', borderBottom:'1px solid #888', paddingBottom:'2px', minHeight:'14px' }}>{form.gender || ''}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:'7px', color:'#555' }}>Дата рождения</div>
+                      <div style={{ fontSize:'10px', fontWeight:600, color:'#111', borderBottom:'1px solid #888', paddingBottom:'2px', minHeight:'14px' }}>{form.birth || ''}</div>
+                    </div>
                   </div>
                 </div>
               </div>
-              {/* MRZ */}
-              <div style={{ marginTop: '14px', fontFamily: 'Courier New,monospace', fontSize: '9px', color: '#444', background: '#f5f5f5', padding: '6px 8px', borderRadius: '3px', letterSpacing: '2px', lineHeight: 1.9 }}>
-                <div>{mrzLine1}</div>
-                <div>{mrzLine2}</div>
+
+              {/* Place of birth */}
+              <div style={{ marginBottom:'6px' }}>
+                <div style={{ fontSize:'7px', color:'#555' }}>Место рождения</div>
+                <div style={{ fontSize:'9.5px', fontWeight:600, color:'#111', borderBottom:'1px solid #888', paddingBottom:'2px', minHeight:'14px', textTransform:'uppercase', letterSpacing:'0.5px' }}>
+                  {form.place ? `С. ${form.place}` : ''}
+                </div>
               </div>
-              {/* Signature line */}
-              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '9px', color: '#888' }}>
-                <div>Подпись владельца:<div style={{ width: '120px', borderTop: '1px solid #555', marginTop: '18px' }} /></div>
-                <div style={{ textAlign: 'right', fontSize: '8px', color: '#ccc' }}>МВД России</div>
+
+              {/* QR code */}
+              <div style={{ position:'absolute', top:'30px', right:'28px' }}>
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent((form.series||'0000')+' '+(form.number||'000000')+' '+form.fio)}`} style={{ width:'52px', height:'52px', display:'block' }} />
+                <div style={{ fontSize:'6px', color:'#aaa', textAlign:'center', marginTop:'2px' }}>ID</div>
+              </div>
+
+              {/* Series vertical */}
+              <div style={{ position:'absolute', right:'6px', top:'0', bottom:'0', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <div style={{ writingMode:'vertical-rl', fontWeight:700, fontSize:'11px', color:'#8B1A1A', letterSpacing:'4px', opacity:0.85 }}>
+                  {form.series || '00'} {form.number || '000000'}
+                </div>
+              </div>
+
+              {/* MRZ zone */}
+              <div style={{ position:'absolute', bottom:'20px', left:'20px', right:'20px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'7px', letterSpacing:'3px', color:'#8B1A1A', marginBottom:'4px', opacity:0.7 }}>
+                  {['РОССИЯ','RUSSIA','РОССИЯ','RUSSIA','РОССИЯ'].map((r,i)=><span key={i}>{r}</span>)}
+                </div>
+                <div style={{ background:'rgba(0,0,0,0.06)', padding:'4px 6px', borderRadius:'2px', fontFamily:'Courier New,monospace', fontSize:'7.5px', color:'#222', letterSpacing:'1.5px', lineHeight:'1.8' }}>
+                  <div>{mrzLine1}</div>
+                  <div>{mrzLine2}</div>
+                </div>
               </div>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-2 text-center">Предпросмотр · данные обновляются в реальном времени</p>
         </div>
       </div>
 
-      {/* Saved */}
+      {/* Saved passports */}
       {saved.length > 0 && (
-        <Card className="p-6">
-          <h3 className="font-heading text-lg text-gov-navy uppercase mb-4">Сохранённые паспорта ({saved.length})</h3>
-          <div className="grid grid-cols-4 gap-3">
+        <Card className="p-5">
+          <h3 className="font-heading text-base text-gov-navy uppercase mb-4">Сохранённые паспорта ({saved.length})</h3>
+          <div className="grid grid-cols-3 gap-3">
             {saved.map((p) => {
-              const qr = `https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(p.series + ' ' + p.number + ' ' + p.fio)}`;
+              const qr = `https://api.qrserver.com/v1/create-qr-code/?size=50x50&data=${encodeURIComponent(p.series+' '+p.number+' '+p.fio)}`;
+              const fp = p.fio ? p.fio.split(' ') : [];
               return (
-                <div key={p.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow relative group">
-                  <button onClick={() => setSaved((r) => r.filter((x) => x.id !== p.id))} className="absolute top-2 right-2 z-10 bg-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-gov-red"><Icon name="Trash2" size={14} /></button>
-                  {/* Mini passport */}
-                  <div style={{ display: 'flex', height: '80px', background: '#fff' }}>
-                    <div style={{ width: '40px', background: 'linear-gradient(160deg,#8B1A1A,#6B0F0F)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <img src={EMBLEM} style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '50%', border: '1px solid rgba(201,161,74,0.5)' }} />
+                <div key={p.id} className="group relative border rounded-lg overflow-hidden hover:shadow-md transition-shadow" style={{ background: '#e8ddd0' }}>
+                  <button onClick={() => setSaved((r) => r.filter((x) => x.id !== p.id))} className="absolute top-1.5 right-1.5 z-10 bg-white/80 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-gov-red"><Icon name="Trash2" size={13} /></button>
+                  <div style={{ display:'flex', padding:'10px', gap:'10px' }}>
+                    {/* mini red bar */}
+                    <div style={{ width:'4px', background:'#8B1A1A', borderRadius:'2px', flexShrink:0 }} />
+                    {/* photo */}
+                    <div style={{ width:'42px', height:'54px', border:'2px solid #8B1A1A', overflow:'hidden', flexShrink:0, background:'#f0ebe4', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {p.photo ? <img src={p.photo} style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <Icon name="User" size={16} className="text-gov-navy/25" />}
                     </div>
-                    <div style={{ flex: 1, padding: '8px', display: 'flex', gap: '8px', overflow: 'hidden' }}>
-                      <div style={{ width: '38px', height: '50px', flexShrink: 0, border: '1px solid #ddd', borderRadius: '2px', overflow: 'hidden', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {p.photo ? <img src={p.photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="User" size={14} className="text-gov-navy/20" />}
-                      </div>
-                      <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ fontSize: '10px', fontWeight: 600, color: '#0B2349', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.fio || '—'}</div>
-                        <div style={{ fontSize: '9px', fontFamily: 'monospace', color: '#666', marginTop: '2px' }}>{p.series || '0000'} {p.number || '000000'}</div>
-                        <div style={{ fontSize: '8px', color: '#aaa', marginTop: '2px' }}>{p.birth || '—'}</div>
-                      </div>
-                      <img src={qr} style={{ width: '34px', height: '34px', alignSelf: 'center', flexShrink: 0 }} />
+                    {/* info */}
+                    <div style={{ flex:1, overflow:'hidden' }}>
+                      <div style={{ fontSize:'11px', fontWeight:700, color:'#111', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fp[0] || '—'}</div>
+                      <div style={{ fontSize:'9.5px', color:'#444' }}>{fp[1] || ''} {fp[2] || ''}</div>
+                      <div style={{ fontSize:'9px', fontFamily:'monospace', color:'#8B1A1A', marginTop:'2px', fontWeight:600 }}>{p.series || '0000'} {p.number || '000000'}</div>
+                      <div style={{ fontSize:'8px', color:'#777', marginTop:'1px' }}>{p.birth || '—'}</div>
                     </div>
+                    <img src={qr} style={{ width:'38px', height:'38px', alignSelf:'center', flexShrink:0 }} />
                   </div>
                 </div>
               );
