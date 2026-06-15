@@ -598,13 +598,14 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
   const [saved, setSaved] = store;
   const [photo, setPhoto] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
   type PF = { fio: string; birth: string; place: string; series: string; number: string; issued: string; date: string };
   const empty: PF = { fio: '', birth: '', place: '', series: '', number: '', issued: '', date: '' };
   const [form, setForm] = useState<PF>(empty);
   const set = (k: keyof PF, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const qrData = encodeURIComponent(`${form.series || '0000'} ${form.number || '000000'} ${form.fio || 'Гражданин РФ'}`);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${qrData}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}`;
 
   const save = () => {
     if (!form.fio) { toast({ title: 'Укажите ФИО', variant: 'destructive' }); return; }
@@ -613,85 +614,203 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
     toast({ title: 'Паспорт сохранён' });
   };
 
+  const printPassport = () => {
+    const el = printRef.current;
+    if (!el) return;
+    const html = el.outerHTML;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Паспорт</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { background:#fff; font-family:'Roboto',sans-serif; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+      .passport-book { width:800px; display:flex; box-shadow:0 8px 40px rgba(0,0,0,0.3); border-radius:6px; overflow:hidden; }
+      .passport-cover { width:220px; background:linear-gradient(160deg,#8B1A1A 0%,#6B0F0F 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px; color:#fff; text-align:center; position:relative; }
+      .passport-cover::after { content:''; position:absolute; inset:0; background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,0.05) 1px,transparent 0); background-size:14px 14px; }
+      .cover-emblem { width:80px; height:80px; object-fit:cover; border-radius:50%; border:2px solid rgba(201,161,74,0.6); margin-bottom:16px; position:relative; z-index:1; }
+      .cover-title { font-family:'Oswald',sans-serif; font-size:14px; letter-spacing:3px; text-transform:uppercase; color:#C9A14A; line-height:1.5; position:relative; z-index:1; }
+      .cover-sub { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.5); margin-top:8px; position:relative; z-index:1; }
+      .spine { width:12px; background:linear-gradient(to right,#5a0a0a,#8B1A1A); }
+      .passport-inner { flex:1; background:#fff; padding:32px; border-left:1px solid #e0e0e0; }
+      .inner-header { display:flex; align-items:center; gap:12px; border-bottom:2px solid #8B1A1A; padding-bottom:12px; margin-bottom:20px; }
+      .inner-header img { width:40px; height:40px; object-fit:cover; }
+      .inner-header-text { font-family:'Oswald',sans-serif; }
+      .inner-header-text .country { font-size:11px; color:#666; text-transform:uppercase; letter-spacing:1px; }
+      .inner-header-text .doctype { font-size:16px; color:#8B1A1A; text-transform:uppercase; letter-spacing:2px; }
+      .passport-number { font-family:'Oswald',sans-serif; font-size:22px; color:#0B2349; letter-spacing:4px; margin-bottom:20px; border:1px solid #ddd; display:inline-block; padding:4px 12px; border-radius:3px; background:#f8f8f8; }
+      .inner-body { display:flex; gap:24px; }
+      .photo-block { width:110px; flex-shrink:0; }
+      .photo-block img, .photo-placeholder { width:110px; height:140px; object-fit:cover; border:2px solid #ccc; border-radius:3px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#999; font-size:11px; }
+      .fields { flex:1; }
+      .field-row { margin-bottom:14px; }
+      .field-label { font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:#888; margin-bottom:2px; }
+      .field-value { font-size:14px; font-weight:500; color:#111; border-bottom:1px solid #e0e0e0; padding-bottom:4px; min-height:22px; }
+      .field-row-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      .footer { margin-top:24px; padding-top:12px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-end; }
+      .footer-sign { font-size:10px; color:#888; }
+      .footer-sign .line { width:140px; border-top:1px solid #555; margin-top:24px; }
+      .qr-block { text-align:center; }
+      .qr-block img { width:70px; height:70px; }
+      .qr-block p { font-size:8px; color:#999; margin-top:3px; }
+      .mrz { margin-top:16px; font-family:'Courier New',monospace; font-size:11px; color:#333; background:#f5f5f5; padding:8px 10px; border-radius:3px; letter-spacing:2px; line-height:1.8; }
+    </style></head><body>${html}</body></html>`);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 400);
+  };
+
+  const fioP = form.fio ? form.fio.split(' ') : [];
+  const lastName = fioP[0] || '—';
+  const firstName = fioP[1] || '—';
+  const midName = fioP[2] || '—';
+  const mrzLine1 = `P<RUS${(lastName + '<<' + firstName + '<' + midName).replace(/\s/g,'<').toUpperCase().padEnd(39,'<')}`.slice(0,44);
+  const mrzLine2 = `${(form.series||'0000').replace(/\s/g,'')}${(form.number||'000000').replace(/\s/g,'')}0RUS${(form.birth||'000000').replace(/[^0-9]/g,'').slice(2)}0`.padEnd(44,'<').slice(0,44);
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-6 print:block">
-        <Card className="p-6 print:hidden">
-          <h3 className="font-heading text-lg text-gov-navy uppercase mb-4">Создание паспорта</h3>
-          <div className="space-y-3">
-            {([['fio', 'Фамилия Имя Отчество'], ['birth', 'Дата рождения'], ['place', 'Место рождения'], ['issued', 'Кем выдан'], ['date', 'Дата выдачи']] as [keyof PF, string][]).map(([k, label]) => (
-              <div key={k}><Label>{label}</Label><Input className="mt-1" value={form[k]} onChange={(e) => set(k, e.target.value)} /></div>
-            ))}
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Серия</Label><Input className="mt-1" maxLength={4} value={form.series} onChange={(e) => set('series', e.target.value)} /></div>
-              <div><Label>Номер</Label><Input className="mt-1" maxLength={6} value={form.number} onChange={(e) => set('number', e.target.value)} /></div>
+      <div className="grid grid-cols-5 gap-6">
+        {/* Form */}
+        <div className="col-span-2">
+          <Card className="p-6">
+            <h3 className="font-heading text-lg text-gov-navy uppercase mb-4">Данные паспорта</h3>
+            <div className="space-y-3">
+              {([['fio', 'Фамилия Имя Отчество'], ['birth', 'Дата рождения'], ['place', 'Место рождения'], ['issued', 'Кем выдан'], ['date', 'Дата выдачи']] as [keyof PF, string][]).map(([k, label]) => (
+                <div key={k}><Label>{label}</Label><Input className="mt-1" value={form[k]} onChange={(e) => set(k, e.target.value)} /></div>
+              ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Серия</Label><Input className="mt-1" maxLength={4} value={form.series} onChange={(e) => set('series', e.target.value)} placeholder="4512" /></div>
+                <div><Label>Номер</Label><Input className="mt-1" maxLength={6} value={form.number} onChange={(e) => set('number', e.target.value)} placeholder="123456" /></div>
+              </div>
+              <Button onClick={() => fileRef.current?.click()} variant="outline" className="w-full">
+                <Icon name="Camera" size={16} className="mr-2" />{photo ? 'Заменить фото' : 'Загрузить фото гражданина'}
+              </Button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await readFile(f)); }} />
+              <div className="flex gap-2 pt-1">
+                <Button onClick={save} className="flex-1 bg-gov-navy hover:bg-gov-blue"><Icon name="Save" size={16} className="mr-2" />Сохранить</Button>
+                <Button onClick={printPassport} variant="outline" className="flex-1"><Icon name="Printer" size={16} className="mr-2" />Печать</Button>
+              </div>
             </div>
-            <Button onClick={() => fileRef.current?.click()} variant="outline" className="w-full">
-              <Icon name="Camera" size={16} className="mr-2" />{photo ? 'Заменить фото' : 'Загрузить фото'}
-            </Button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await readFile(f)); }} />
-            <div className="flex gap-2">
-              <Button onClick={save} className="flex-1 bg-gov-navy hover:bg-gov-blue"><Icon name="Save" size={16} className="mr-2" />Сохранить</Button>
-              <Button onClick={() => window.print()} variant="outline" className="flex-1"><Icon name="Printer" size={16} className="mr-2" />Печать</Button>
+          </Card>
+        </div>
+
+        {/* Passport book preview */}
+        <div className="col-span-3 flex items-start justify-center">
+          <div ref={printRef} className="passport-book" style={{ width: '100%', display: 'flex', boxShadow: '0 8px 40px rgba(0,0,0,0.25)', borderRadius: '6px', overflow: 'hidden', fontFamily: 'Roboto,sans-serif' }}>
+            {/* Cover */}
+            <div style={{ width: '180px', flexShrink: 0, background: 'linear-gradient(160deg,#8B1A1A 0%,#6B0F0F 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 14px', color: '#fff', textAlign: 'center', position: 'relative' }}>
+              <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle at 1px 1px,rgba(255,255,255,0.05) 1px,transparent 0)', backgroundSize: '14px 14px' }} />
+              <img src={EMBLEM} className="cover-emblem" style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '50%', border: '2px solid rgba(201,161,74,0.5)', marginBottom: '14px', position: 'relative', zIndex: 1 }} />
+              <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: '11px', letterSpacing: '3px', textTransform: 'uppercase', color: '#C9A14A', lineHeight: 1.6, position: 'relative', zIndex: 1 }}>
+                Российская<br />Федерация
+              </div>
+              <div style={{ fontSize: '8px', letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginTop: '10px', position: 'relative', zIndex: 1 }}>
+                Паспорт<br />гражданина
+              </div>
+              <div style={{ position: 'absolute', bottom: '16px', color: 'rgba(201,161,74,0.3)', fontSize: '60px', zIndex: 0, lineHeight: 1 }}>⋮</div>
             </div>
-          </div>
-        </Card>
-        <div className="flex flex-col gap-4">
-          <PassportCard data={form} photo={photo} qrUrl={qrUrl} />
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary rounded-md p-3 print:hidden">
-            <Icon name="QrCode" size={16} className="text-gov-steel" />
-            QR-код содержит серию, номер и ФИО для быстрой идентификации
+            {/* Spine */}
+            <div style={{ width: '10px', background: 'linear-gradient(to right,#5a0a0a,#8B1A1A)', flexShrink: 0 }} />
+            {/* Inner page */}
+            <div style={{ flex: 1, background: '#fff', padding: '24px', borderLeft: '1px solid #e0e0e0' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '2px solid #8B1A1A', paddingBottom: '10px', marginBottom: '16px' }}>
+                <img src={EMBLEM} style={{ width: '36px', height: '36px', objectFit: 'cover' }} />
+                <div style={{ fontFamily: 'Oswald,sans-serif' }}>
+                  <div style={{ fontSize: '9px', color: '#777', textTransform: 'uppercase', letterSpacing: '1px' }}>Министерство внутренних дел</div>
+                  <div style={{ fontSize: '13px', color: '#8B1A1A', textTransform: 'uppercase', letterSpacing: '2px' }}>Паспорт гражданина РФ</div>
+                </div>
+              </div>
+              {/* Series/number */}
+              <div style={{ fontFamily: 'Oswald,sans-serif', fontSize: '18px', color: '#0B2349', letterSpacing: '4px', marginBottom: '16px', display: 'inline-block', padding: '3px 10px', border: '1px solid #ddd', borderRadius: '3px', background: '#f8f8f8' }}>
+                {form.series || '0000'} {form.number || '000000'}
+              </div>
+              {/* Body */}
+              <div style={{ display: 'flex', gap: '20px' }}>
+                {/* Photo */}
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{ width: '90px', height: '116px', border: '1.5px solid #ccc', borderRadius: '3px', overflow: 'hidden', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {photo
+                      ? <img src={photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <span style={{ fontSize: '10px', color: '#aaa', textAlign: 'center', padding: '8px' }}>Фото</span>}
+                  </div>
+                  <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                    <img src={qrUrl} style={{ width: '58px', height: '58px' }} />
+                    <div style={{ fontSize: '7px', color: '#aaa', marginTop: '2px' }}>ID-код</div>
+                  </div>
+                </div>
+                {/* Fields */}
+                <div style={{ flex: 1 }}>
+                  {[
+                    ['Фамилия', lastName],
+                    ['Имя', firstName],
+                    ['Отчество', midName],
+                    ['Дата рождения', form.birth || '—'],
+                    ['Место рождения', form.place || '—'],
+                  ].map(([l, v]) => (
+                    <div key={l} style={{ marginBottom: '10px' }}>
+                      <div style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#888', marginBottom: '1px' }}>{l}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', borderBottom: '1px solid #e8e8e8', paddingBottom: '3px', minHeight: '18px' }}>{v}</div>
+                    </div>
+                  ))}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                    {[['Кем выдан', form.issued || '—'], ['Дата выдачи', form.date || '—']].map(([l, v]) => (
+                      <div key={l}>
+                        <div style={{ fontSize: '8px', textTransform: 'uppercase', letterSpacing: '1px', color: '#888', marginBottom: '1px' }}>{l}</div>
+                        <div style={{ fontSize: '11px', fontWeight: 500, color: '#333', borderBottom: '1px solid #e8e8e8', paddingBottom: '2px', minHeight: '16px' }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* MRZ */}
+              <div style={{ marginTop: '14px', fontFamily: 'Courier New,monospace', fontSize: '9px', color: '#444', background: '#f5f5f5', padding: '6px 8px', borderRadius: '3px', letterSpacing: '2px', lineHeight: 1.9 }}>
+                <div>{mrzLine1}</div>
+                <div>{mrzLine2}</div>
+              </div>
+              {/* Signature line */}
+              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '9px', color: '#888' }}>
+                <div>Подпись владельца:<div style={{ width: '120px', borderTop: '1px solid #555', marginTop: '18px' }} /></div>
+                <div style={{ textAlign: 'right', fontSize: '8px', color: '#ccc' }}>МВД России</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Saved */}
       {saved.length > 0 && (
-        <Card className="p-6 print:hidden">
+        <Card className="p-6">
           <h3 className="font-heading text-lg text-gov-navy uppercase mb-4">Сохранённые паспорта ({saved.length})</h3>
-          <div className="grid grid-cols-3 gap-4">
-            {saved.map((p) => (
-              <div key={p.id} className="border rounded-lg p-3 flex gap-3 items-center relative hover:shadow-md transition-shadow">
-                <button onClick={() => setSaved((r) => r.filter((x) => x.id !== p.id))} className="absolute top-2 right-2 text-muted-foreground hover:text-gov-red"><Icon name="Trash2" size={15} /></button>
-                <div className="w-12 h-16 bg-secondary rounded overflow-hidden flex items-center justify-center shrink-0">
-                  {p.photo ? <img src={p.photo} alt="" className="w-full h-full object-cover" /> : <Icon name="User" size={20} className="text-gov-navy/30" />}
+          <div className="grid grid-cols-4 gap-3">
+            {saved.map((p) => {
+              const qr = `https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(p.series + ' ' + p.number + ' ' + p.fio)}`;
+              return (
+                <div key={p.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow relative group">
+                  <button onClick={() => setSaved((r) => r.filter((x) => x.id !== p.id))} className="absolute top-2 right-2 z-10 bg-white rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-gov-red"><Icon name="Trash2" size={14} /></button>
+                  {/* Mini passport */}
+                  <div style={{ display: 'flex', height: '80px', background: '#fff' }}>
+                    <div style={{ width: '40px', background: 'linear-gradient(160deg,#8B1A1A,#6B0F0F)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <img src={EMBLEM} style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '50%', border: '1px solid rgba(201,161,74,0.5)' }} />
+                    </div>
+                    <div style={{ flex: 1, padding: '8px', display: 'flex', gap: '8px', overflow: 'hidden' }}>
+                      <div style={{ width: '38px', height: '50px', flexShrink: 0, border: '1px solid #ddd', borderRadius: '2px', overflow: 'hidden', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {p.photo ? <img src={p.photo} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="User" size={14} className="text-gov-navy/20" />}
+                      </div>
+                      <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: '#0B2349', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.fio || '—'}</div>
+                        <div style={{ fontSize: '9px', fontFamily: 'monospace', color: '#666', marginTop: '2px' }}>{p.series || '0000'} {p.number || '000000'}</div>
+                        <div style={{ fontSize: '8px', color: '#aaa', marginTop: '2px' }}>{p.birth || '—'}</div>
+                      </div>
+                      <img src={qr} style={{ width: '34px', height: '34px', alignSelf: 'center', flexShrink: 0 }} />
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm min-w-0">
-                  <div className="font-500 text-gov-navy truncate">{p.fio}</div>
-                  <div className="text-xs font-mono text-muted-foreground">{p.series || '0000'} {p.number || '000000'}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
     </div>
-  );
-}
-
-function PassportCard({ data, photo, qrUrl }: { data: { fio: string; birth: string; place: string; series: string; number: string }; photo: string | null; qrUrl: string }) {
-  return (
-    <Card className="p-6 bg-gradient-to-br from-[#7a1414] to-[#9E1B1B] text-white relative overflow-hidden print:shadow-none">
-      <div className="absolute right-4 top-4 opacity-20"><Icon name="Shield" size={80} /></div>
-      <div className="text-center border-b border-white/30 pb-3 mb-4">
-        <div className="font-heading text-lg uppercase tracking-widest">Российская Федерация</div>
-        <div className="text-xs uppercase tracking-wider opacity-90">Паспорт гражданина</div>
-      </div>
-      <div className="flex gap-4">
-        <div className="w-28 h-36 bg-white/90 rounded flex items-center justify-center overflow-hidden shrink-0">
-          {photo ? <img src={photo} alt="фото" className="w-full h-full object-cover" /> : <Icon name="User" size={40} className="text-gov-navy/40" />}
-        </div>
-        <div className="flex-1 text-sm space-y-2">
-          <Field l="Фамилия, имя, отчество" v={data.fio} />
-          <Field l="Дата рождения" v={data.birth} />
-          <Field l="Место рождения" v={data.place} />
-        </div>
-      </div>
-      <div className="flex items-end justify-between mt-4 pt-3 border-t border-white/30">
-        <div><div className="text-[10px] uppercase opacity-70">Серия / Номер</div>
-          <div className="font-mono font-700 text-lg tracking-wider">{data.series || '0000'} {data.number || '000000'}</div>
-        </div>
-        <div className="bg-white p-1 rounded"><img src={qrUrl} alt="QR" className="w-16 h-16" /></div>
-      </div>
-    </Card>
   );
 }
 
