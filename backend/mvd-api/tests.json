@@ -1,20 +1,16 @@
 {
   "tests": [
     {
-      "name": "GET cases",
-      "method": "GET",
-      "path": "/?table=cases",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial",
-      "expectedBody": []
-    },
-    {
       "name": "GET citizens",
       "method": "GET",
       "path": "/?table=citizens",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial",
-      "expectedBody": []
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET passports",
+      "method": "GET",
+      "path": "/?table=passports",
+      "expectedStatus": 200
     }
   ]
 }

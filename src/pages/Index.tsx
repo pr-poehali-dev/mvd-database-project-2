@@ -40,13 +40,28 @@ type PassportRow = {
   series: string; number: string; issued: string; date: string; photo: string | null;
 };
 
-function useStore<T>(key: string) {
-  const [items, setItems] = useState<T[]>(() => {
-    try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; }
-    catch { return []; }
-  });
-  useEffect(() => { localStorage.setItem(key, JSON.stringify(items)); }, [key, items]);
-  return [items, setItems] as const;
+const API = 'https://functions.poehali.dev/3a3aa753-ddc5-4f50-b716-54427f619bda';
+
+async function apiGet<T>(table: string): Promise<T[]> {
+  const r = await fetch(`${API}?table=${table}`);
+  return r.json();
+}
+async function apiPost(table: string, data: Record<string, unknown>) {
+  await fetch(`${API}?table=${table}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+}
+async function apiDelete(table: string, id: string) {
+  await fetch(`${API}?table=${table}&id=${id}`, { method: 'DELETE' });
+}
+
+function useServerStore<T>(table: string) {
+  const [items, setItems] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const reload = () => {
+    setLoading(true);
+    apiGet<T>(table).then((d) => { setItems(d); setLoading(false); }).catch(() => setLoading(false));
+  };
+  useEffect(() => { reload(); }, [table]);
+  return { items, setItems, loading, reload };
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -79,25 +94,25 @@ const STATUSES_CIT = ['Чисто', 'Под наблюдением', 'Разыс
 const Index = () => {
   const { authed, currentUser, login, logout } = useAuth();
   const [tab, setTab] = useState('home');
-  const staff = useStore<StaffRow>('mvd_staff');
-  const cases = useStore<CaseRow>('mvd_cases');
-  const citizens = useStore<CitizenRow>('mvd_citizens');
-  const passports = useStore<PassportRow>('mvd_passports');
 
-  const handleLogin = (u: string, p: string) => {
-    // Главный аккаунт
+  const staffStore    = useServerStore<StaffRow>('staff');
+  const casesStore    = useServerStore<CaseRow>('cases');
+  const citizensStore = useServerStore<CitizenRow>('citizens');
+  const passportsStore = useServerStore<PassportRow>('passports');
+
+  const handleLogin = async (u: string, p: string) => {
     if (u === 'Novikov' && p === '89223109976') {
       login({ login: 'Novikov', fio: 'Новиков (Администратор)', rank: 'Администратор', tab: '0001' });
       return;
     }
-    // Сотрудники из базы
-    const emp = staff[0].find((s) => s.login === u && s.password === p);
+    const emp = staffStore.items.find((s) => s.login === u && s.password === p);
     if (emp) { login({ login: emp.login, fio: emp.fio, rank: emp.rank, tab: emp.tab }); return; }
     toast({ title: 'Ошибка входа', description: 'Неверный логин или пароль', variant: 'destructive' });
   };
 
   if (!authed) return <LoginScreen onLogin={handleLogin} />;
 
+  const anyLoading = staffStore.loading || casesStore.loading || citizensStore.loading || passportsStore.loading;
   const initials = (currentUser?.fio || '??').split(' ').map((w: string) => w[0]).slice(0, 2).join('');
 
   return (
@@ -127,7 +142,10 @@ const Index = () => {
         <header className="bg-white border-b h-16 flex items-center justify-between px-8 sticky top-0 z-10 print:hidden">
           <h1 className="font-heading text-xl text-gov-navy uppercase tracking-wide">{NAV.find((n) => n.id === tab)?.label}</h1>
           <div className="flex items-center gap-3">
-            <Badge className="bg-green-100 text-green-700 hover:bg-green-100"><Icon name="Wifi" size={12} className="mr-1" />Защищённое соединение</Badge>
+            {anyLoading
+              ? <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100"><Icon name="Loader" size={12} className="mr-1 animate-spin" />Загрузка...</Badge>
+              : <Badge className="bg-green-100 text-green-700 hover:bg-green-100"><Icon name="Database" size={12} className="mr-1" />Сервер</Badge>
+            }
             <div className="flex items-center gap-2 pl-3 border-l">
               <div className="w-9 h-9 rounded-full bg-gov-navy text-white flex items-center justify-center text-sm font-700">{initials}</div>
               <div className="text-sm leading-tight">
@@ -139,13 +157,13 @@ const Index = () => {
         </header>
 
         <div className="p-8 animate-fade-in" key={tab}>
-          {tab === 'home'     && <Home setTab={setTab} cases={cases[0]} citizens={citizens[0]} staff={staff[0]} passports={passports[0]} />}
-          {tab === 'cases'    && <Cases store={cases} />}
-          {tab === 'citizens' && <Citizens store={citizens} />}
-          {tab === 'passport' && <Passport store={passports} />}
-          {tab === 'search'   && <SearchTab citizens={citizens[0]} cases={cases[0]} />}
-          {tab === 'staff'    && <Staff store={staff} />}
-          {tab === 'reports'  && <Reports cases={cases[0]} citizens={citizens[0]} />}
+          {tab === 'home'     && <Home setTab={setTab} cases={casesStore.items} citizens={citizensStore.items} staff={staffStore.items} passports={passportsStore.items} />}
+          {tab === 'cases'    && <Cases store={casesStore} />}
+          {tab === 'citizens' && <Citizens store={citizensStore} />}
+          {tab === 'passport' && <Passport store={passportsStore} />}
+          {tab === 'search'   && <SearchTab citizens={citizensStore.items} cases={casesStore.items} />}
+          {tab === 'staff'    && <Staff store={staffStore} />}
+          {tab === 'reports'  && <Reports cases={casesStore.items} citizens={citizensStore.items} />}
           {tab === 'settings' && <Settings />}
         </div>
       </main>
@@ -208,30 +226,37 @@ function Home({ setTab, cases, citizens, staff, passports }: { setTab: (t: strin
 }
 
 /* ============================================================ CASES */
-function Cases({ store }: { store: readonly [CaseRow[], React.Dispatch<React.SetStateAction<CaseRow[]>>] }) {
-  const [rows, setRows] = store;
+function Cases({ store }: { store: ReturnType<typeof useServerStore<CaseRow>> }) {
+  const { items: rows, reload } = store;
   const [view, setView] = useState<'list' | 'add' | 'detail'>('list');
   const [selected, setSelected] = useState<CaseRow | null>(null);
   const [form, setForm] = useState<Partial<CaseRow>>({});
   const [photo, setPhoto] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const sf = (k: keyof CaseRow, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const save = () => {
+  const save = async () => {
     if (!form.num || !form.fio) { toast({ title: 'Заполните обязательные поля', variant: 'destructive' }); return; }
-    const row: CaseRow = {
+    setSaving(true);
+    const row = {
       id: uid(), num: form.num || '', title: form.title || '', article: form.article || '',
       date: form.date || '', officer: form.officer || '', status: form.status || 'В работе',
       fio: form.fio || '', birth: form.birth || '', address: form.address || '',
-      desc: form.desc || '', photo,
+      descr: form.desc || '', photo,
     };
-    setRows((r) => [row, ...r]);
+    await apiPost('cases', row as Record<string, unknown>);
+    await reload();
     toast({ title: 'Дело сохранено' });
-    setForm({}); setPhoto(null); setView('list');
+    setForm({}); setPhoto(null); setView('list'); setSaving(false);
   };
 
-  const del = (id: string) => { setRows((r) => r.filter((x) => x.id !== id)); setView('list'); toast({ title: 'Дело удалено' }); };
+  const del = async (id: string) => {
+    await apiDelete('cases', id);
+    await reload();
+    setView('list'); toast({ title: 'Дело удалено' });
+  };
 
   const printCard = () => window.print();
 
@@ -276,7 +301,9 @@ function Cases({ store }: { store: readonly [CaseRow[], React.Dispatch<React.Set
         </div>
       </div>
       <div className="flex gap-3 mt-6 pt-4 border-t">
-        <Button className="bg-gov-navy hover:bg-gov-blue" onClick={save}><Icon name="Save" size={16} className="mr-2" />Сохранить дело</Button>
+        <Button className="bg-gov-navy hover:bg-gov-blue" onClick={save} disabled={saving}>
+          <Icon name={saving ? 'Loader' : 'Save'} size={16} className="mr-2" />{saving ? 'Сохранение...' : 'Сохранить дело'}
+        </Button>
       </div>
     </Card>
   );
@@ -360,29 +387,36 @@ function Cases({ store }: { store: readonly [CaseRow[], React.Dispatch<React.Set
 }
 
 /* ============================================================ CITIZENS */
-function Citizens({ store }: { store: readonly [CitizenRow[], React.Dispatch<React.SetStateAction<CitizenRow[]>>] }) {
-  const [rows, setRows] = store;
+function Citizens({ store }: { store: ReturnType<typeof useServerStore<CitizenRow>> }) {
+  const { items: rows, reload } = store;
   const [view, setView] = useState<'list' | 'add' | 'detail'>('list');
   const [selected, setSelected] = useState<CitizenRow | null>(null);
   const [form, setForm] = useState<Partial<CitizenRow>>({});
   const [photo, setPhoto] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const sf = (k: keyof CitizenRow, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const save = () => {
+  const save = async () => {
     if (!form.fio) { toast({ title: 'Укажите ФИО', variant: 'destructive' }); return; }
-    const row: CitizenRow = {
+    setSaving(true);
+    const row = {
       id: uid(), fio: form.fio || '', birth: form.birth || '', passport: form.passport || '',
       city: form.city || '', address: form.address || '', status: form.status || 'Чисто',
       photo, phone: form.phone || '', gender: form.gender || '', nationality: form.nationality || '',
       note: form.note || '',
     };
-    setRows((r) => [row, ...r]);
+    await apiPost('citizens', row as Record<string, unknown>);
+    await reload();
     toast({ title: 'Гражданин добавлен' });
-    setForm({}); setPhoto(null); setView('list');
+    setForm({}); setPhoto(null); setView('list'); setSaving(false);
   };
 
-  const del = (id: string) => { setRows((r) => r.filter((x) => x.id !== id)); setView('list'); toast({ title: 'Запись удалена' }); };
+  const del = async (id: string) => {
+    await apiDelete('citizens', id);
+    await reload();
+    setView('list'); toast({ title: 'Запись удалена' });
+  };
 
   if (view === 'add') return (
     <Card className="p-6 max-w-4xl mx-auto animate-fade-in">
@@ -423,7 +457,9 @@ function Citizens({ store }: { store: readonly [CitizenRow[], React.Dispatch<Rea
         </div>
       </div>
       <div className="flex gap-3 mt-6 pt-4 border-t">
-        <Button className="bg-gov-navy hover:bg-gov-blue" onClick={save}><Icon name="Save" size={16} className="mr-2" />Сохранить карточку</Button>
+        <Button className="bg-gov-navy hover:bg-gov-blue" onClick={save} disabled={saving}>
+          <Icon name={saving ? 'Loader' : 'Save'} size={16} className="mr-2" />{saving ? 'Сохранение...' : 'Сохранить карточку'}
+        </Button>
       </div>
     </Card>
   );
@@ -510,18 +546,21 @@ function Citizens({ store }: { store: readonly [CitizenRow[], React.Dispatch<Rea
 }
 
 /* ============================================================ STAFF */
-function Staff({ store }: { store: readonly [StaffRow[], React.Dispatch<React.SetStateAction<StaffRow[]>>] }) {
-  const [rows, setRows] = store;
+function Staff({ store }: { store: ReturnType<typeof useServerStore<StaffRow>> }) {
+  const { items: rows, reload } = store;
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Partial<StaffRow>>({});
+  const [saving, setSaving] = useState(false);
   const sf = (k: keyof StaffRow, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const [showPass, setShowPass] = useState<Record<string, boolean>>({});
 
-  const save = () => {
+  const save = async () => {
     if (!form.fio || !form.login || !form.password) { toast({ title: 'Заполните ФИО, логин и пароль', variant: 'destructive' }); return; }
-    setRows((r) => [{ id: uid(), fio: form.fio!, dept: form.dept || '', rank: form.rank || '', tab: form.tab || '', login: form.login!, password: form.password!, phone: form.phone || '', note: form.note || '' }, ...r]);
+    setSaving(true);
+    await apiPost('staff', { id: uid(), fio: form.fio, dept: form.dept || '', rank: form.rank || '', tab: form.tab || '', login: form.login, password: form.password, phone: form.phone || '', note: form.note || '' });
+    await reload();
     toast({ title: 'Сотрудник добавлен' });
-    setForm({}); setAdding(false);
+    setForm({}); setAdding(false); setSaving(false);
   };
 
   return (
@@ -547,7 +586,9 @@ function Staff({ store }: { store: readonly [StaffRow[], React.Dispatch<React.Se
             <Row label="Примечание"><Input value={form.note || ''} onChange={(e) => sf('note', e.target.value)} /></Row>
           </div>
           <div className="mt-4 pt-4 border-t">
-            <Button className="bg-gov-navy hover:bg-gov-blue" onClick={save}><Icon name="Save" size={16} className="mr-2" />Сохранить</Button>
+            <Button className="bg-gov-navy hover:bg-gov-blue" onClick={save} disabled={saving}>
+              <Icon name={saving ? 'Loader' : 'Save'} size={16} className="mr-2" />{saving ? 'Сохранение...' : 'Сохранить'}
+            </Button>
           </div>
         </Card>
       )}
@@ -584,7 +625,7 @@ function Staff({ store }: { store: readonly [StaffRow[], React.Dispatch<React.Se
                   {s.note && <div className="text-muted-foreground">{s.note}</div>}
                 </div>
               </div>
-              <DeleteBtn onClick={() => { setRows((r) => r.filter((x) => x.id !== s.id)); toast({ title: 'Сотрудник удалён' }); }} />
+              <DeleteBtn onClick={async () => { await apiDelete('staff', s.id); await reload(); toast({ title: 'Сотрудник удалён' }); }} />
             </div>
           </Card>
         ))}
@@ -594,9 +635,10 @@ function Staff({ store }: { store: readonly [StaffRow[], React.Dispatch<React.Se
 }
 
 /* ============================================================ PASSPORT */
-function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<React.SetStateAction<PassportRow[]>>] }) {
-  const [saved, setSaved] = store;
+function Passport({ store }: { store: ReturnType<typeof useServerStore<PassportRow>> }) {
+  const { items: saved, reload } = store;
   const [photo, setPhoto] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
   type PF = { fio: string; birth: string; place: string; series: string; number: string; issued: string; date: string; gender: string; code: string };
@@ -604,10 +646,12 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
   const [form, setForm] = useState<PF>(empty);
   const set = (k: keyof PF, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const save = () => {
+  const save = async () => {
     if (!form.fio) { toast({ title: 'Укажите ФИО', variant: 'destructive' }); return; }
-    setSaved((r) => [{ id: uid(), ...form, photo }, ...r]);
-    setForm(empty); setPhoto(null);
+    setSaving(true);
+    await apiPost('passports', { id: uid(), ...form, photo });
+    await reload();
+    setForm(empty); setPhoto(null); setSaving(false);
     toast({ title: 'Паспорт сохранён' });
   };
 
@@ -674,7 +718,7 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
               </Button>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await readFile(f)); }} />
               <div className="flex gap-2 pt-1">
-                <Button onClick={save} className="flex-1 bg-gov-navy hover:bg-gov-blue h-9 text-sm"><Icon name="Save" size={15} className="mr-1.5" />Сохранить</Button>
+                <Button onClick={save} disabled={saving} className="flex-1 bg-gov-navy hover:bg-gov-blue h-9 text-sm"><Icon name={saving ? 'Loader' : 'Save'} size={15} className="mr-1.5" />{saving ? 'Сохранение...' : 'Сохранить'}</Button>
                 <Button onClick={printPassport} variant="outline" className="flex-1 h-9 text-sm"><Icon name="Printer" size={15} className="mr-1.5" />Печать</Button>
               </div>
             </div>
@@ -857,7 +901,7 @@ function Passport({ store }: { store: readonly [PassportRow[], React.Dispatch<Re
               const fp = p.fio ? p.fio.split(' ') : [];
               return (
                 <div key={p.id} className="group relative border rounded-lg overflow-hidden hover:shadow-md transition-shadow" style={{ background: '#e8ddd0' }}>
-                  <button onClick={() => setSaved((r) => r.filter((x) => x.id !== p.id))} className="absolute top-1.5 right-1.5 z-10 bg-white/80 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-gov-red"><Icon name="Trash2" size={13} /></button>
+                  <button onClick={async () => { await apiDelete('passports', p.id); await reload(); toast({ title: 'Паспорт удалён' }); }} className="absolute top-1.5 right-1.5 z-10 bg-white/80 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-gov-red"><Icon name="Trash2" size={13} /></button>
                   <div style={{ display:'flex', padding:'10px', gap:'10px' }}>
                     {/* mini red bar */}
                     <div style={{ width:'4px', background:'#8B1A1A', borderRadius:'2px', flexShrink:0 }} />
@@ -968,19 +1012,36 @@ function Reports({ cases, citizens }: { cases: CaseRow[]; citizens: CitizenRow[]
 
 /* ============================================================ SETTINGS */
 function Settings() {
-  const clearAll = () => {
-    ['mvd_cases', 'mvd_citizens', 'mvd_staff', 'mvd_passports'].forEach((k) => localStorage.removeItem(k));
-    toast({ title: 'База очищена' });
-    setTimeout(() => window.location.reload(), 800);
+  const [clearing, setClearing] = useState(false);
+  const clearAll = async () => {
+    if (!window.confirm('Удалить все записи из базы? Это действие необратимо.')) return;
+    setClearing(true);
+    try {
+      const tables = ['cases', 'citizens', 'staff', 'passports'];
+      for (const table of tables) {
+        const rows = await apiGet<{ id: string }>(table);
+        for (const row of rows) {
+          await apiDelete(table, row.id);
+        }
+      }
+      toast({ title: 'База очищена' });
+      setTimeout(() => window.location.reload(), 600);
+    } finally {
+      setClearing(false);
+    }
   };
   return (
     <Card className="p-6 max-w-lg">
       <h3 className="font-heading text-lg text-gov-navy uppercase mb-4">Настройки системы</h3>
       <div className="space-y-2 text-sm">
         <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Главный пользователь</span><span className="font-500">Novikov</span></div>
-        <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Хранилище</span><span className="font-500">Локальное (браузер)</span></div>
+        <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Хранилище</span><span className="font-500 text-green-600 flex items-center gap-1"><Icon name="Database" size={13} />Сервер (PostgreSQL)</span></div>
+        <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Синхронизация</span><span className="font-500 text-green-600">Все устройства</span></div>
       </div>
-      <Button variant="destructive" className="mt-5" onClick={clearAll}><Icon name="Trash2" size={16} className="mr-2" />Очистить всю базу</Button>
+      <Button variant="destructive" className="mt-5" onClick={clearAll} disabled={clearing}>
+        <Icon name={clearing ? 'Loader' : 'Trash2'} size={16} className="mr-2" />
+        {clearing ? 'Очистка...' : 'Очистить всю базу'}
+      </Button>
     </Card>
   );
 }
